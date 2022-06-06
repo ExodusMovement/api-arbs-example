@@ -17,9 +17,10 @@ const wallet = new Wallet(Keypair.fromSecretKey(bs58.decode(process.env.PRIVATE_
 const mints = {
   USDC: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
   SOL: 'So11111111111111111111111111111111111111112',
-  NANA: '6uZ7MRGGf3FJhzk9TUk3QRMR2fz83WY9BEVBukRvMRVX',
+  // NANA: '6uZ7MRGGf3FJhzk9TUk3QRMR2fz83WY9BEVBukRvMRVX',
   TULIP: 'TuLipcqtGVXP9XR62wM8WWCm6a9vhLs7T1uoWBk6FDs',
-  OXY: 'z3dn17yLaGMKffVogeFHQ9zWVcXgqgf3PQnDsNs2g6M',
+  // OXY: 'z3dn17yLaGMKffVogeFHQ9zWVcXgqgf3PQnDsNs2g6M',
+  GMT: '7i5KKsX2weiTkry7jA4ZwSuXGhs5eJBEjY8vVxR4pfRx',
 }
 
 // wsol account
@@ -142,24 +143,33 @@ await Promise.all(
           outputMint: mints[to],
           amount: initial,
           slippage: 0.2,
-          onlyDirectRoutes: true,
+          // onlyDirectRoutes: true,
         }
 
-        const {
-          data: [route0],
-        } = await getCoinQuote(opts)
-
-        const { setupTransaction, swapTransaction, cleanupTransaction } = await getTransaction(
-          route0
+        const { data: routes } = await getCoinQuote(opts)
+        const executionOptions = await Promise.all(
+          routes.map(async (route) => {
+            const { setupTransaction, swapTransaction, cleanupTransaction } = await getTransaction(
+              route
+            )
+            return [setupTransaction, swapTransaction, cleanupTransaction].filter(Boolean)
+          })
         )
+
+        const shortestRouteIndex = executionOptions.findIndex((txs) => txs.length === 1)
+        const shortestRouteValueVsOptimalRoute =
+          shortestRouteIndex === -1
+            ? null
+            : routes[shortestRouteIndex].outAmount / routes[0].outAmount
 
         console.log({
           permutation,
           opts,
-          txs: [setupTransaction, swapTransaction, cleanupTransaction].filter(Boolean).length,
-          // setupTransaction,
-          // swapTransaction,
-          // cleanupTransaction,
+          txs: executionOptions.map((e, i) => ({
+            count: e.length,
+            outAmount: routes[i].outAmount,
+          })),
+          shortestRouteValueVsOptimalRoute,
         })
       })
     )
